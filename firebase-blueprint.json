@@ -1,0 +1,384 @@
+{
+  "entities": {
+    "UserPublic": {
+      "title": "UserPublic",
+      "description": "Publicly visible learner, recruiter, or admin profile metadata without PII.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "role": { "type": "string", "enum": ["student", "recruiter", "admin"] },
+        "headline": { "type": "string", "maxLength": 160 },
+        "bio": { "type": "string", "maxLength": 800 },
+        "targetCareerId": { "type": "string", "maxLength": 80 },
+        "avatarUrl": { "type": "string", "maxLength": 500 },
+        "company": { "type": "string", "maxLength": 120 },
+        "skillNames": { "type": "array", "description": "Bounded list of up to 30 skill names." },
+        "skillLevels": { "type": "object", "description": "Map of skill name to 0-100 proficiency integer." },
+        "readinessScore": { "type": "integer" },
+        "learningHours": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "role", "updatedAt"]
+    },
+    "UserPrivate": {
+      "title": "UserPrivate",
+      "description": "Private PII and personal settings isolated to owner and admins.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "phone": { "type": "string", "maxLength": 40 },
+        "location": { "type": "string", "maxLength": 120 },
+        "collegeOrOrg": { "type": "string", "maxLength": 160 },
+        "experienceLevel": { "type": "string", "enum": ["beginner", "intermediate", "advanced"] },
+        "weeklyHoursAvailable": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "createdAt", "updatedAt"]
+    },
+    "Roadmap": {
+      "title": "Roadmap",
+      "description": "AI-generated personalized learning roadmap for a learner.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "careerId": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "careerTitle": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "experienceLevel": { "type": "string", "maxLength": 40 },
+        "weeklyHours": { "type": "integer" },
+        "stages": { "type": "array", "description": "Up to 12 roadmap stages with lessons and tasks." },
+        "completedLessonIds": { "type": "array", "description": "Up to 150 completed lesson identifiers." },
+        "progressPercent": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "careerId", "careerTitle", "stages", "completedLessonIds", "progressPercent", "createdAt", "updatedAt"]
+    },
+    "QuizAttempt": {
+      "title": "QuizAttempt",
+      "description": "Immutable verified quiz submission record.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "quizId": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "quizTitle": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "careerId": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "difficulty": { "type": "string", "maxLength": 30 },
+        "score": { "type": "integer" },
+        "correctCount": { "type": "integer" },
+        "totalQuestions": { "type": "integer" },
+        "durationSeconds": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "quizId", "quizTitle", "careerId", "score", "correctCount", "totalQuestions", "createdAt"]
+    },
+    "Resume": {
+      "title": "Resume",
+      "description": "User ATS resume document.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "template": { "type": "string", "enum": ["executive", "technical", "academic"] },
+        "data": { "type": "object" },
+        "aiSuggestions": { "type": "string", "maxLength": 6000 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "title", "template", "data", "updatedAt"]
+    },
+    "InterviewSession": {
+      "title": "InterviewSession",
+      "description": "Interview prep practice response and Gemini AI evaluation.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "careerId": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "question": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "category": { "type": "string", "maxLength": 40 },
+        "difficulty": { "type": "string", "maxLength": 30 },
+        "userAnswer": { "type": "string", "minLength": 1, "maxLength": 6000 },
+        "aiFeedback": { "type": "string", "maxLength": 6000 },
+        "score": { "type": "integer" },
+        "durationSeconds": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "careerId", "question", "userAnswer", "score", "createdAt"]
+    },
+    "ProjectProgress": {
+      "title": "ProjectProgress",
+      "description": "Learner tracking for practical skill-gap projects.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "projectId": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "careerId": { "type": "string", "maxLength": 80 },
+        "status": { "type": "string", "enum": ["not_started", "in_progress", "completed"] },
+        "githubUrl": { "type": "string", "maxLength": 300 },
+        "notes": { "type": "string", "maxLength": 2000 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "projectId", "title", "status", "updatedAt"]
+    },
+    "Bookmark": {
+      "title": "Bookmark",
+      "description": "Saved learning resource bookmark.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "resourceId": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 180 },
+        "category": { "type": "string", "maxLength": 80 },
+        "url": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "resourceId", "title", "createdAt"]
+    },
+    "Job": {
+      "title": "Job",
+      "description": "Recruiter job posting with required skills.",
+      "type": "object",
+      "properties": {
+        "recruiterUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "company": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "careerId": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "location": { "type": "string", "maxLength": 120 },
+        "employmentType": { "type": "string", "maxLength": 40 },
+        "experienceLevel": { "type": "string", "maxLength": 40 },
+        "salaryRange": { "type": "string", "maxLength": 80 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "requiredSkills": { "type": "array", "description": "Up to 20 required skills." },
+        "status": { "type": "string", "enum": ["open", "closed"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["recruiterUid", "company", "title", "careerId", "description", "requiredSkills", "status", "createdAt", "updatedAt"]
+    },
+    "JobApplication": {
+      "title": "JobApplication",
+      "description": "Candidate job application visible to applicant and job's recruiter.",
+      "type": "object",
+      "properties": {
+        "jobId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "jobTitle": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "company": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "recruiterUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "applicantUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "applicantName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "applicantHeadline": { "type": "string", "maxLength": 160 },
+        "applicantSkills": { "type": "array" },
+        "matchScore": { "type": "integer" },
+        "coverNote": { "type": "string", "maxLength": 2000 },
+        "status": { "type": "string", "enum": ["submitted", "shortlisted", "interview", "rejected", "accepted"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["jobId", "jobTitle", "company", "recruiterUid", "applicantUid", "applicantName", "matchScore", "status", "createdAt", "updatedAt"]
+    },
+    "CommunityPost": {
+      "title": "CommunityPost",
+      "description": "Community learning discussion, achievement share, or question.",
+      "type": "object",
+      "properties": {
+        "authorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "authorRole": { "type": "string", "maxLength": 30 },
+        "category": { "type": "string", "enum": ["achievement", "question", "resource", "discussion"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 180 },
+        "content": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "tags": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorUid", "authorName", "category", "title", "content", "createdAt", "updatedAt"]
+    },
+    "PostComment": {
+      "title": "PostComment",
+      "description": "Comment under a community post.",
+      "type": "object",
+      "properties": {
+        "authorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "content": { "type": "string", "minLength": 1, "maxLength": 1500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorUid", "authorName", "content", "createdAt"]
+    },
+    "PostLike": {
+      "title": "PostLike",
+      "description": "Like marker keyed by user ID under a post.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "createdAt"]
+    },
+    "Follow": {
+      "title": "Follow",
+      "description": "Follow edge between two users.",
+      "type": "object",
+      "properties": {
+        "followerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "targetUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["followerUid", "targetUid", "createdAt"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "Content moderation report.",
+      "type": "object",
+      "properties": {
+        "reporterUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "targetType": { "type": "string", "enum": ["post", "comment", "job", "user"] },
+        "targetId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["open", "resolved", "dismissed"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["reporterUid", "targetType", "targetId", "reason", "status", "createdAt", "updatedAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Real-time user notification.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "type": { "type": "string", "enum": ["roadmap", "quiz", "job", "application", "community", "achievement", "system"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 400 },
+        "link": { "type": "string", "maxLength": 200 },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "type", "title", "message", "read", "createdAt"]
+    },
+    "AIConversation": {
+      "title": "AIConversation",
+      "description": "HirePath AI assistant thread metadata.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "mode": { "type": "string", "enum": ["deep", "fast"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "title", "mode", "createdAt", "updatedAt"]
+    },
+    "AIMessage": {
+      "title": "AIMessage",
+      "description": "Individual message inside an AI conversation.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "role": { "type": "string", "enum": ["user", "assistant"] },
+        "content": { "type": "string", "minLength": 1, "maxLength": 20000 },
+        "modelUsed": { "type": "string", "maxLength": 80 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "role", "content", "createdAt"]
+    },
+    "CustomResource": {
+      "title": "CustomResource",
+      "description": "Admin-curated learning resource.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "category": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "skillTags": { "type": "array" },
+        "resourceType": { "type": "string", "maxLength": 40 },
+        "difficulty": { "type": "string", "enum": ["Beginner", "Intermediate", "Advanced"] },
+        "url": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "estimatedMinutes": { "type": "integer" },
+        "createdBy": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "description", "category", "resourceType", "difficulty", "url", "estimatedMinutes", "createdBy", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users_public/{userId}": {
+      "schema": { "$ref": "#/entities/UserPublic" },
+      "description": "Public profile metadata for learners, recruiters, and admins."
+    },
+    "/users_private/{userId}": {
+      "schema": { "$ref": "#/entities/UserPrivate" },
+      "description": "Isolated private PII profile document accessible only to owner and admins."
+    },
+    "/roadmaps/{roadmapId}": {
+      "schema": { "$ref": "#/entities/Roadmap" },
+      "description": "Personalized AI learning roadmaps owned by learners."
+    },
+    "/quizAttempts/{attemptId}": {
+      "schema": { "$ref": "#/entities/QuizAttempt" },
+      "description": "Immutable quiz attempt history records."
+    },
+    "/resumes/{resumeId}": {
+      "schema": { "$ref": "#/entities/Resume" },
+      "description": "ATS resume documents owned by learners."
+    },
+    "/interviewSessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/InterviewSession" },
+      "description": "Interview practice answers and AI evaluation history."
+    },
+    "/projectProgress/{progressId}": {
+      "schema": { "$ref": "#/entities/ProjectProgress" },
+      "description": "Practical project completion tracking."
+    },
+    "/bookmarks/{bookmarkId}": {
+      "schema": { "$ref": "#/entities/Bookmark" },
+      "description": "Saved learning resource bookmarks."
+    },
+    "/jobs/{jobId}": {
+      "schema": { "$ref": "#/entities/Job" },
+      "description": "Recruiter job listings."
+    },
+    "/applications/{applicationId}": {
+      "schema": { "$ref": "#/entities/JobApplication" },
+      "description": "Job applications shared between applicant and recruiter."
+    },
+    "/communityPosts/{postId}": {
+      "schema": { "$ref": "#/entities/CommunityPost" },
+      "description": "Community posts."
+    },
+    "/communityPosts/{postId}/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/PostComment" },
+      "description": "Comments under a community post."
+    },
+    "/communityPosts/{postId}/likes/{userId}": {
+      "schema": { "$ref": "#/entities/PostLike" },
+      "description": "Likes on a community post."
+    },
+    "/follows/{followId}": {
+      "schema": { "$ref": "#/entities/Follow" },
+      "description": "Follower relationships."
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/Report" },
+      "description": "Moderation reports managed by admins."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "Real-time notifications per user."
+    },
+    "/aiConversations/{conversationId}": {
+      "schema": { "$ref": "#/entities/AIConversation" },
+      "description": "HirePath AI chat conversations."
+    },
+    "/aiConversations/{conversationId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/AIMessage" },
+      "description": "Chat messages inside an AI conversation."
+    },
+    "/resources/{resourceId}": {
+      "schema": { "$ref": "#/entities/CustomResource" },
+      "description": "Admin-curated learning resources."
+    }
+  }
+}

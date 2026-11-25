@@ -1,0 +1,547 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net: default deny everything
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Boot-time connectivity check doc
+    match /test/{docId} {
+      allow get: if docId == 'connection';
+    }
+
+    // Global hardened helpers
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedAdmin() {
+      return isVerifiedUser() && request.auth.token.email == 'sadhana.s2025cse@sece.ac.in';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (isVerifiedUser() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isOwner(uid) {
+      return isVerifiedUser() && request.auth.uid == uid;
+    }
+
+    function isValidRoleAssignment(role) {
+      return role in ['student', 'recruiter'] || (role == 'admin' && isBootstrappedAdmin());
+    }
+
+    function isValidBoundedStringList(arr, maxLen) {
+      return arr is list && arr.size() <= maxLen && (arr.size() == 0 || (arr[0] is string && arr[0].size() <= 120));
+    }
+
+    function isValidUserPublic(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'role', 'updatedAt']) &&
+        data.keys().hasOnly([
+          'uid', 'displayName', 'role', 'headline', 'bio', 'targetCareerId',
+          'avatarUrl', 'company', 'skillNames', 'skillLevels', 'readinessScore',
+          'learningHours', 'updatedAt'
+        ]) &&
+        isValidId(data.uid) &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+        data.role is string && isValidRoleAssignment(data.role) &&
+        (!('headline' in data) || (data.headline is string && data.headline.size() <= 160)) &&
+        (!('bio' in data) || (data.bio is string && data.bio.size() <= 800)) &&
+        (!('targetCareerId' in data) || (data.targetCareerId is string && data.targetCareerId.size() <= 80)) &&
+        (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 500)) &&
+        (!('company' in data) || (data.company is string && data.company.size() <= 120)) &&
+        (!('skillNames' in data) || isValidBoundedStringList(data.skillNames, 30)) &&
+        (!('skillLevels' in data) || (data.skillLevels is map && data.skillLevels.size() <= 30)) &&
+        (!('readinessScore' in data) || (data.readinessScore is int && data.readinessScore >= 0 && data.readinessScore <= 100)) &&
+        (!('learningHours' in data) || (data.learningHours is number && data.learningHours >= 0 && data.learningHours <= 10000)) &&
+        data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
+
+    function isValidUserPrivate(data) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly([
+          'uid', 'email', 'phone', 'location', 'collegeOrOrg',
+          'experienceLevel', 'weeklyHoursAvailable', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.uid) &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+        (!('phone' in data) || (data.phone is string && data.phone.size() <= 40)) &&
+        (!('location' in data) || (data.location is string && data.location.size() <= 120)) &&
+        (!('collegeOrOrg' in data) || (data.collegeOrOrg is string && data.collegeOrOrg.size() <= 160)) &&
+        (!('experienceLevel' in data) || (data.experienceLevel in ['beginner', 'intermediate', 'advanced'])) &&
+        (!('weeklyHoursAvailable' in data) || (data.weeklyHoursAvailable is int && data.weeklyHoursAvailable >= 1 && data.weeklyHoursAvailable <= 80)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
+
+    function isValidRoadmap(data) {
+      return data.keys().hasAll(['uid', 'careerId', 'careerTitle', 'stages', 'completedLessonIds', 'progressPercent', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'careerId', 'careerTitle', 'experienceLevel', 'weeklyHours', 'stages', 'completedLessonIds', 'progressPercent', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.careerId is string && data.careerId.size() >= 1 && data.careerId.size() <= 80 &&
+        data.careerTitle is string && data.careerTitle.size() >= 1 && data.careerTitle.size() <= 120 &&
+        (!('experienceLevel' in data) || (data.experienceLevel is string && data.experienceLevel.size() <= 40)) &&
+        (!('weeklyHours' in data) || (data.weeklyHours is int && data.weeklyHours >= 1 && data.weeklyHours <= 80)) &&
+        data.stages is list && data.stages.size() >= 1 && data.stages.size() <= 12 &&
+        isValidBoundedStringList(data.completedLessonIds, 150) &&
+        data.progressPercent is int && data.progressPercent >= 0 && data.progressPercent <= 100 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
+
+    function isValidQuizAttempt(data) {
+      return data.keys().hasAll(['uid', 'quizId', 'quizTitle', 'careerId', 'score', 'correctCount', 'totalQuestions', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'quizId', 'quizTitle', 'careerId', 'difficulty', 'score', 'correctCount', 'totalQuestions', 'durationSeconds', 'createdAt']) &&
+        isValidId(data.uid) &&
+        data.quizId is string && data.quizId.size() >= 1 && data.quizId.size() <= 80 &&
+        data.quizTitle is string && data.quizTitle.size() >= 1 && data.quizTitle.size() <= 140 &&
+        data.careerId is string && data.careerId.size() >= 1 && data.careerId.size() <= 80 &&
+        (!('difficulty' in data) || (data.difficulty is string && data.difficulty.size() <= 30)) &&
+        data.score is int && data.score >= 0 && data.score <= 100 &&
+        data.correctCount is int && data.correctCount >= 0 && data.correctCount <= 100 &&
+        data.totalQuestions is int && data.totalQuestions >= 1 && data.totalQuestions <= 100 &&
+        (!('durationSeconds' in data) || (data.durationSeconds is int && data.durationSeconds >= 0 && data.durationSeconds <= 7200)) &&
+        data.createdAt is timestamp && data.createdAt == request.time;
+    }
+
+    function isValidResume(data) {
+      return data.keys().hasAll(['uid', 'title', 'template', 'data', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'title', 'template', 'data', 'aiSuggestions', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+        data.template in ['executive', 'technical', 'academic'] &&
+        data.data is map && data.data.size() <= 20 &&
+        (!('aiSuggestions' in data) || (data.aiSuggestions is string && data.aiSuggestions.size() <= 6000)) &&
+        data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
+
+    function isValidInterviewSession(data) {
+      return data.keys().hasAll(['uid', 'careerId', 'question', 'userAnswer', 'score', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'careerId', 'question', 'category', 'difficulty', 'userAnswer', 'aiFeedback', 'score', 'durationSeconds', 'createdAt']) &&
+        isValidId(data.uid) &&
+        data.careerId is string && data.careerId.size() >= 1 && data.careerId.size() <= 80 &&
+        data.question is string && data.question.size() >= 1 && data.question.size() <= 1000 &&
+        (!('category' in data) || (data.category is string && data.category.size() <= 40)) &&
+        (!('difficulty' in data) || (data.difficulty is string && data.difficulty.size() <= 30)) &&
+        data.userAnswer is string && data.userAnswer.size() >= 1 && data.userAnswer.size() <= 6000 &&
+        (!('aiFeedback' in data) || (data.aiFeedback is string && data.aiFeedback.size() <= 6000)) &&
+        data.score is int && data.score >= 0 && data.score <= 100 &&
+        (!('durationSeconds' in data) || (data.durationSeconds is int && data.durationSeconds >= 0 && data.durationSeconds <= 3600)) &&
+        data.createdAt is timestamp && data.createdAt == request.time;
+    }
+
+    function isValidProjectProgress(data) {
+      return data.keys().hasAll(['uid', 'projectId', 'title', 'status', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'projectId', 'title', 'careerId', 'status', 'githubUrl', 'notes', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.projectId is string && data.projectId.size() >= 1 && data.projectId.size() <= 80 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        (!('careerId' in data) || (data.careerId is string && data.careerId.size() <= 80)) &&
+        data.status in ['not_started', 'in_progress', 'completed'] &&
+        (!('githubUrl' in data) || (data.githubUrl is string && data.githubUrl.size() <= 300)) &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 2000)) &&
+        data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
+
+    function isValidBookmark(data) {
+      return data.keys().hasAll(['uid', 'resourceId', 'title', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'resourceId', 'title', 'category', 'url', 'createdAt']) &&
+        isValidId(data.uid) &&
+        data.resourceId is string && data.resourceId.size() >= 1 && data.resourceId.size() <= 80 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 180 &&
+        (!('category' in data) || (data.category is string && data.category.size() <= 80)) &&
+        (!('url' in data) || (data.url is string && data.url.size() <= 500)) &&
+        data.createdAt is timestamp && data.createdAt == request.time;
+    }
+
+    function isValidJob(data) {
+      return data.keys().hasAll(['recruiterUid', 'company', 'title', 'careerId', 'description', 'requiredSkills', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['recruiterUid', 'company', 'title', 'careerId', 'location', 'employmentType', 'experienceLevel', 'salaryRange', 'description', 'requiredSkills', 'status', 'createdAt', 'updatedAt']) &&
+        isValidId(data.recruiterUid) &&
+        data.company is string && data.company.size() >= 1 && data.company.size() <= 120 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 140 &&
+        data.careerId is string && data.careerId.size() >= 1 && data.careerId.size() <= 80 &&
+        (!('location' in data) || (data.location is string && data.location.size() <= 120)) &&
+        (!('employmentType' in data) || (data.employmentType is string && data.employmentType.size() <= 40)) &&
+        (!('experienceLevel' in data) || (data.experienceLevel is string && data.experienceLevel.size() <= 40)) &&
+        (!('salaryRange' in data) || (data.salaryRange is string && data.salaryRange.size() <= 80)) &&
+        data.description is string && data.description.size() >= 1 && data.description.size() <= 4000 &&
+        isValidBoundedStringList(data.requiredSkills, 20) &&
+        data.status in ['open', 'closed'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
+
+    function isValidApplication(data) {
+      return data.keys().hasAll(['jobId', 'jobTitle', 'company', 'recruiterUid', 'applicantUid', 'applicantName', 'matchScore', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['jobId', 'jobTitle', 'company', 'recruiterUid', 'applicantUid', 'applicantName', 'applicantHeadline', 'applicantSkills', 'matchScore', 'coverNote', 'status', 'createdAt', 'updatedAt']) &&
+        isValidId(data.jobId) &&
+        data.jobTitle is string && data.jobTitle.size() >= 1 && data.jobTitle.size() <= 140 &&
+        data.company is string && data.company.size() >= 1 && data.company.size() <= 120 &&
+        isValidId(data.recruiterUid) &&
+        isValidId(data.applicantUid) &&
+        data.applicantName is string && data.applicantName.size() >= 1 && data.applicantName.size() <= 100 &&
+        (!('applicantHeadline' in data) || (data.applicantHeadline is string && data.applicantHeadline.size() <= 160)) &&
+        (!('applicantSkills' in data) || isValidBoundedStringList(data.applicantSkills, 30)) &&
+        data.matchScore is int && data.matchScore >= 0 && data.matchScore <= 100 &&
+        (!('coverNote' in data) || (data.coverNote is string && data.coverNote.size() <= 2000)) &&
+        data.status in ['submitted', 'shortlisted', 'interview', 'rejected', 'accepted'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
+
+    function isValidPost(data) {
+      return data.keys().hasAll(['authorUid', 'authorName', 'category', 'title', 'content', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['authorUid', 'authorName', 'authorRole', 'category', 'title', 'content', 'tags', 'createdAt', 'updatedAt']) &&
+        isValidId(data.authorUid) &&
+        data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 100 &&
+        (!('authorRole' in data) || (data.authorRole is string && data.authorRole.size() <= 30)) &&
+        data.category in ['achievement', 'question', 'resource', 'discussion'] &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 180 &&
+        data.content is string && data.content.size() >= 1 && data.content.size() <= 4000 &&
+        (!('tags' in data) || isValidBoundedStringList(data.tags, 8)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
+
+    function isValidComment(data) {
+      return data.keys().hasAll(['authorUid', 'authorName', 'content', 'createdAt']) &&
+        data.keys().hasOnly(['authorUid', 'authorName', 'content', 'createdAt']) &&
+        isValidId(data.authorUid) &&
+        data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 100 &&
+        data.content is string && data.content.size() >= 1 && data.content.size() <= 1500 &&
+        data.createdAt is timestamp && data.createdAt == request.time;
+    }
+
+    function isValidLike(data) {
+      return data.keys().hasAll(['uid', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'createdAt']) &&
+        isValidId(data.uid) &&
+        data.createdAt is timestamp && data.createdAt == request.time;
+    }
+
+    function isValidFollow(data) {
+      return data.keys().hasAll(['followerUid', 'targetUid', 'createdAt']) &&
+        data.keys().hasOnly(['followerUid', 'targetUid', 'createdAt']) &&
+        isValidId(data.followerUid) &&
+        isValidId(data.targetUid) &&
+        data.followerUid != data.targetUid &&
+        data.createdAt is timestamp && data.createdAt == request.time;
+    }
+
+    function isValidReport(data) {
+      return data.keys().hasAll(['reporterUid', 'targetType', 'targetId', 'reason', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['reporterUid', 'targetType', 'targetId', 'reason', 'status', 'createdAt', 'updatedAt']) &&
+        isValidId(data.reporterUid) &&
+        data.targetType in ['post', 'comment', 'job', 'user'] &&
+        data.targetId is string && data.targetId.size() >= 1 && data.targetId.size() <= 128 &&
+        data.reason is string && data.reason.size() >= 1 && data.reason.size() <= 1000 &&
+        data.status in ['open', 'resolved', 'dismissed'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['uid', 'type', 'title', 'message', 'read', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'type', 'title', 'message', 'link', 'read', 'createdAt']) &&
+        isValidId(data.uid) &&
+        data.type in ['roadmap', 'quiz', 'job', 'application', 'community', 'achievement', 'system'] &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 140 &&
+        data.message is string && data.message.size() >= 1 && data.message.size() <= 400 &&
+        (!('link' in data) || (data.link is string && data.link.size() <= 200)) &&
+        data.read is bool &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidAIConversation(data) {
+      return data.keys().hasAll(['uid', 'title', 'mode', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'title', 'mode', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        data.mode in ['deep', 'fast'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
+
+    function isValidAIMessage(data) {
+      return data.keys().hasAll(['uid', 'role', 'content', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'role', 'content', 'modelUsed', 'createdAt']) &&
+        isValidId(data.uid) &&
+        data.role in ['user', 'assistant'] &&
+        data.content is string && data.content.size() >= 1 && data.content.size() <= 20000 &&
+        (!('modelUsed' in data) || (data.modelUsed is string && data.modelUsed.size() <= 80)) &&
+        data.createdAt is timestamp && data.createdAt == request.time;
+    }
+
+    function isValidCustomResource(data) {
+      return data.keys().hasAll(['title', 'description', 'category', 'resourceType', 'difficulty', 'url', 'estimatedMinutes', 'createdBy', 'createdAt']) &&
+        data.keys().hasOnly(['title', 'description', 'category', 'skillTags', 'resourceType', 'difficulty', 'url', 'estimatedMinutes', 'createdBy', 'createdAt']) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        data.description is string && data.description.size() >= 1 && data.description.size() <= 1000 &&
+        data.category is string && data.category.size() >= 1 && data.category.size() <= 80 &&
+        (!('skillTags' in data) || isValidBoundedStringList(data.skillTags, 10)) &&
+        data.resourceType is string && data.resourceType.size() >= 1 && data.resourceType.size() <= 40 &&
+        data.difficulty in ['Beginner', 'Intermediate', 'Advanced'] &&
+        data.url is string && data.url.size() >= 1 && data.url.size() <= 500 &&
+        data.estimatedMinutes is int && data.estimatedMinutes >= 1 && data.estimatedMinutes <= 10000 &&
+        isValidId(data.createdBy) &&
+        data.createdAt is timestamp && data.createdAt == request.time;
+    }
+
+    // Admins registry
+    match /admins/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isBootstrappedAdmin();
+      allow create, update, delete: if isValidId(userId) && isBootstrappedAdmin();
+    }
+
+    // Public profiles (non-PII)
+    match /users_public/{userId} {
+      allow get: if isValidId(userId) && isVerifiedUser();
+      allow list: if isVerifiedUser() && resource.data.role in ['student', 'recruiter', 'admin'];
+      allow create: if isValidId(userId) && isOwner(userId) && isValidUserPublic(incoming()) && incoming().uid == userId;
+      allow update: if isValidId(userId) && isValidUserPublic(incoming()) && incoming().uid == existing().uid && (
+        isAdmin() ||
+        (isOwner(userId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'displayName', 'role', 'headline', 'bio', 'targetCareerId',
+            'avatarUrl', 'company', 'skillNames', 'skillLevels',
+            'readinessScore', 'learningHours', 'updatedAt'
+          ]) &&
+          (incoming().role == existing().role || incoming().role in ['student', 'recruiter']))
+      );
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    // Private PII profiles
+    match /users_private/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isVerifiedUser() && (resource.data.uid == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isValidId(userId) && isOwner(userId) && isValidUserPrivate(incoming()) && incoming().uid == userId && incoming().createdAt == request.time;
+      allow update: if isValidId(userId) && isValidUserPrivate(incoming()) && incoming().uid == existing().uid && incoming().createdAt == existing().createdAt && (
+        isOwner(userId) || isAdmin()
+      ) && incoming().diff(existing()).affectedKeys().hasOnly([
+        'email', 'phone', 'location', 'collegeOrOrg', 'experienceLevel', 'weeklyHoursAvailable', 'updatedAt'
+      ]);
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    // Personalized Roadmaps
+    match /roadmaps/{roadmapId} {
+      allow get: if isValidId(roadmapId) && (isOwner(existing().uid) || isAdmin());
+      allow list: if isVerifiedUser() && (resource.data.uid == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isValidId(roadmapId) && isVerifiedUser() && isValidRoadmap(incoming()) && incoming().uid == request.auth.uid && incoming().createdAt == request.time;
+      allow update: if isValidId(roadmapId) && isValidRoadmap(incoming()) && incoming().uid == existing().uid && incoming().createdAt == existing().createdAt && (
+        isOwner(existing().uid) || isAdmin()
+      ) && incoming().diff(existing()).affectedKeys().hasOnly(['completedLessonIds', 'progressPercent', 'stages', 'updatedAt']);
+      allow delete: if isValidId(roadmapId) && (isOwner(existing().uid) || isAdmin());
+    }
+
+    // Quiz Attempts (immutable once submitted)
+    match /quizAttempts/{attemptId} {
+      allow get: if isValidId(attemptId) && (isOwner(existing().uid) || isAdmin());
+      allow list: if isVerifiedUser() && (resource.data.uid == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isValidId(attemptId) && isVerifiedUser() && isValidQuizAttempt(incoming()) && incoming().uid == request.auth.uid && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(attemptId) && isAdmin();
+    }
+
+    // Resumes
+    match /resumes/{resumeId} {
+      allow get: if isValidId(resumeId) && (isOwner(existing().uid) || isAdmin());
+      allow list: if isVerifiedUser() && resource.data.uid == request.auth.uid;
+      allow create: if isValidId(resumeId) && isVerifiedUser() && isValidResume(incoming()) && incoming().uid == request.auth.uid;
+      allow update: if isValidId(resumeId) && isValidResume(incoming()) && incoming().uid == existing().uid && isOwner(existing().uid) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'template', 'data', 'aiSuggestions', 'updatedAt']);
+      allow delete: if isValidId(resumeId) && (isOwner(existing().uid) || isAdmin());
+    }
+
+    // Interview Practice Sessions (immutable)
+    match /interviewSessions/{sessionId} {
+      allow get: if isValidId(sessionId) && (isOwner(existing().uid) || isAdmin());
+      allow list: if isVerifiedUser() && resource.data.uid == request.auth.uid;
+      allow create: if isValidId(sessionId) && isVerifiedUser() && isValidInterviewSession(incoming()) && incoming().uid == request.auth.uid && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(sessionId) && (isOwner(existing().uid) || isAdmin());
+    }
+
+    // Project Progress
+    match /projectProgress/{progressId} {
+      allow get: if isValidId(progressId) && (isOwner(existing().uid) || isAdmin());
+      allow list: if isVerifiedUser() && resource.data.uid == request.auth.uid;
+      allow create: if isValidId(progressId) && isVerifiedUser() && isValidProjectProgress(incoming()) && incoming().uid == request.auth.uid;
+      allow update: if isValidId(progressId) && isValidProjectProgress(incoming()) && incoming().uid == existing().uid && isOwner(existing().uid) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'githubUrl', 'notes', 'updatedAt']);
+      allow delete: if isValidId(progressId) && (isOwner(existing().uid) || isAdmin());
+    }
+
+    // Bookmarks
+    match /bookmarks/{bookmarkId} {
+      allow get: if isValidId(bookmarkId) && (isOwner(existing().uid) || isAdmin());
+      allow list: if isVerifiedUser() && resource.data.uid == request.auth.uid;
+      allow create: if isValidId(bookmarkId) && isVerifiedUser() && isValidBookmark(incoming()) && incoming().uid == request.auth.uid && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(bookmarkId) && (isOwner(existing().uid) || isAdmin());
+    }
+
+    // Jobs (published by recruiters or admins)
+    match /jobs/{jobId} {
+      allow get: if isValidId(jobId) && isVerifiedUser();
+      allow list: if isVerifiedUser() && resource.data.status in ['open', 'closed'];
+      allow create: if isValidId(jobId) && isVerifiedUser() && isValidJob(incoming()) && incoming().recruiterUid == request.auth.uid && incoming().createdAt == request.time &&
+        get(/databases/$(database)/documents/users_public/$(request.auth.uid)).data.role in ['recruiter', 'admin'];
+      allow update: if isValidId(jobId) && isValidJob(incoming()) && incoming().recruiterUid == existing().recruiterUid && incoming().createdAt == existing().createdAt && (
+        isAdmin() || isOwner(existing().recruiterUid)
+      ) && incoming().diff(existing()).affectedKeys().hasOnly([
+        'company', 'title', 'careerId', 'location', 'employmentType', 'experienceLevel', 'salaryRange', 'description', 'requiredSkills', 'status', 'updatedAt'
+      ]);
+      allow delete: if isValidId(jobId) && (isOwner(existing().recruiterUid) || isAdmin());
+    }
+
+    // Job Applications
+    match /applications/{applicationId} {
+      allow get: if isValidId(applicationId) && (
+        isOwner(existing().applicantUid) || isOwner(existing().recruiterUid) || isAdmin()
+      );
+      allow list: if isVerifiedUser() && (
+        resource.data.applicantUid == request.auth.uid ||
+        resource.data.recruiterUid == request.auth.uid ||
+        isBootstrappedAdmin()
+      );
+      allow create: if isValidId(applicationId) && isVerifiedUser() && isValidApplication(incoming()) &&
+        incoming().applicantUid == request.auth.uid &&
+        incoming().status == 'submitted' &&
+        incoming().createdAt == request.time &&
+        exists(/databases/$(database)/documents/jobs/$(incoming().jobId)) &&
+        get(/databases/$(database)/documents/jobs/$(incoming().jobId)).data.recruiterUid == incoming().recruiterUid;
+      allow update: if isValidId(applicationId) && isValidApplication(incoming()) &&
+        incoming().jobId == existing().jobId &&
+        incoming().applicantUid == existing().applicantUid &&
+        incoming().recruiterUid == existing().recruiterUid &&
+        incoming().createdAt == existing().createdAt && (
+          isAdmin() ||
+          (isOwner(existing().recruiterUid) && !(existing().status in ['accepted', 'rejected']))
+        ) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+      allow delete: if isValidId(applicationId) && (isOwner(existing().applicantUid) || isAdmin());
+    }
+
+    // Community Posts & Subcollections
+    match /communityPosts/{postId} {
+      allow get: if isValidId(postId) && isVerifiedUser();
+      allow list: if isVerifiedUser() && resource.data.category in ['achievement', 'question', 'resource', 'discussion'];
+      allow create: if isValidId(postId) && isVerifiedUser() && isValidPost(incoming()) && incoming().authorUid == request.auth.uid && incoming().createdAt == request.time;
+      allow update: if isValidId(postId) && isValidPost(incoming()) && incoming().authorUid == existing().authorUid && incoming().createdAt == existing().createdAt && (
+        isOwner(existing().authorUid) || isAdmin()
+      ) && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'content', 'category', 'tags', 'updatedAt']);
+      allow delete: if isValidId(postId) && (isOwner(existing().authorUid) || isAdmin());
+
+      match /comments/{commentId} {
+        allow get: if isValidId(postId) && isValidId(commentId) && isVerifiedUser();
+        allow list: if isVerifiedUser() && resource.data.authorUid is string;
+        allow create: if isValidId(postId) && isValidId(commentId) && isVerifiedUser() && isValidComment(incoming()) &&
+          incoming().authorUid == request.auth.uid &&
+          exists(/databases/$(database)/documents/communityPosts/$(postId));
+        allow update: if false;
+        allow delete: if isValidId(postId) && isValidId(commentId) && (isOwner(existing().authorUid) || isAdmin());
+      }
+
+      match /likes/{userId} {
+        allow get: if isValidId(postId) && isValidId(userId) && isVerifiedUser();
+        allow list: if isVerifiedUser() && resource.data.uid is string;
+        allow create: if isValidId(postId) && isValidId(userId) && isOwner(userId) && isValidLike(incoming()) &&
+          incoming().uid == userId &&
+          exists(/databases/$(database)/documents/communityPosts/$(postId));
+        allow update: if false;
+        allow delete: if isValidId(postId) && isValidId(userId) && isOwner(userId);
+      }
+    }
+
+    // Follows
+    match /follows/{followId} {
+      allow get: if isValidId(followId) && isVerifiedUser();
+      allow list: if isVerifiedUser() && (resource.data.followerUid == request.auth.uid || resource.data.targetUid == request.auth.uid);
+      allow create: if isValidId(followId) && isVerifiedUser() && isValidFollow(incoming()) && incoming().followerUid == request.auth.uid;
+      allow update: if false;
+      allow delete: if isValidId(followId) && isOwner(existing().followerUid);
+    }
+
+    // Reports (Moderation)
+    match /reports/{reportId} {
+      allow get: if isValidId(reportId) && (isOwner(existing().reporterUid) || isAdmin());
+      allow list: if isVerifiedUser() && (resource.data.reporterUid == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isValidId(reportId) && isVerifiedUser() && isValidReport(incoming()) &&
+        incoming().reporterUid == request.auth.uid &&
+        incoming().status == 'open' &&
+        incoming().createdAt == request.time;
+      allow update: if isValidId(reportId) && isAdmin() && isValidReport(incoming()) &&
+        incoming().reporterUid == existing().reporterUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+      allow delete: if isValidId(reportId) && isAdmin();
+    }
+
+    // Notifications
+    match /notifications/{notificationId} {
+      allow get: if isValidId(notificationId) && (isOwner(existing().uid) || isAdmin());
+      allow list: if isVerifiedUser() && resource.data.uid == request.auth.uid;
+      allow create: if isValidId(notificationId) && isVerifiedUser() && isValidNotification(incoming()) && incoming().createdAt == request.time && (
+        incoming().uid == request.auth.uid || isAdmin() || incoming().type in ['application', 'community']
+      );
+      allow update: if isValidId(notificationId) && isValidNotification(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        isOwner(existing().uid) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+      allow delete: if isValidId(notificationId) && (isOwner(existing().uid) || isAdmin());
+    }
+
+    // HirePath AI Conversations
+    match /aiConversations/{conversationId} {
+      allow get: if isValidId(conversationId) && (isOwner(existing().uid) || isAdmin());
+      allow list: if isVerifiedUser() && resource.data.uid == request.auth.uid;
+      allow create: if isValidId(conversationId) && isVerifiedUser() && isValidAIConversation(incoming()) && incoming().uid == request.auth.uid && incoming().createdAt == request.time;
+      allow update: if isValidId(conversationId) && isValidAIConversation(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        isOwner(existing().uid) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'mode', 'updatedAt']);
+      allow delete: if isValidId(conversationId) && (isOwner(existing().uid) || isAdmin());
+
+      match /messages/{messageId} {
+        allow get: if isValidId(conversationId) && isValidId(messageId) && (isOwner(existing().uid) || isAdmin());
+        allow list: if isVerifiedUser() && resource.data.uid == request.auth.uid;
+        allow create: if isValidId(conversationId) && isValidId(messageId) && isVerifiedUser() && isValidAIMessage(incoming()) &&
+          incoming().uid == request.auth.uid &&
+          get(/databases/$(database)/documents/aiConversations/$(conversationId)).data.uid == request.auth.uid;
+        allow update: if false;
+        allow delete: if isValidId(conversationId) && isValidId(messageId) && (isOwner(existing().uid) || isAdmin());
+      }
+    }
+
+    // Admin-curated Learning Resources
+    match /resources/{resourceId} {
+      allow get: if isValidId(resourceId) && isVerifiedUser();
+      allow list: if isVerifiedUser() && resource.data.difficulty in ['Beginner', 'Intermediate', 'Advanced'];
+      allow create: if isValidId(resourceId) && isAdmin() && isValidCustomResource(incoming()) && incoming().createdBy == request.auth.uid && incoming().createdAt == request.time;
+      allow update: if isValidId(resourceId) && isAdmin() && isValidCustomResource(incoming()) && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt;
+      allow delete: if isValidId(resourceId) && isAdmin();
+    }
+  }
+}

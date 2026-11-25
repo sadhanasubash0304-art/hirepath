@@ -1,0 +1,8 @@
+{
+  "name": "HirePath",
+  "description": "Learn Smarter. Build Skills. Get Hired. An AI-powered career readiness and educational platform connecting academic learning with real-world industry requirements.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
